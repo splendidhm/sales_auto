@@ -23,5 +23,8 @@ def export_draft(connection: sqlite3.Connection, settings: Settings, draft_id: i
         handle.write(body)
     connection.execute("INSERT INTO exports(draft_id,relative_path,created_at,revision) VALUES(?,?,?,?)",
                        (draft_id, str(relative), now(), revision))
+    if not row["is_mock"]:
+        from affiliate_hub.planning import sync_plan_stage
+        sync_plan_stage(connection, draft_id, "packaged")
     return {"path": str(settings.home / relative), "draft_status": status,
             "revision": revision, "published": False}

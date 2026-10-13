@@ -13,6 +13,30 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AppTests(unittest.TestCase):
+    def test_owner_can_configure_blog_seed_calendar_and_open_new_menus(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"AFFILIATE_HUB_HOME": directory}):
+            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=20).run()
+
+            def field(group, label):
+                return next(element for element in getattr(app, group) if element.label == label)
+
+            app.sidebar.radio[0].set_value("블로그 설정").run()
+            field("text_input", "블로그명").set_value("쇼핑커넥트 테스트")
+            field("text_input", "블로그 URL").set_value("https://blog.naver.com/shoptest")
+            field("button", "블로그 설정 저장").click().run()
+            self.assertFalse(app.exception)
+
+            app.sidebar.radio[0].set_value("콘텐츠 캘린더").run()
+            field("button", "초기 12편 만들기").click().run()
+            self.assertFalse(app.exception)
+            snapshot = Hub(Settings(Path(directory))).snapshot()
+            self.assertEqual(len(snapshot["plans"]), 12)
+            self.assertTrue(all(not plan["affiliate_enabled"] for plan in snapshot["plans"]))
+
+            for menu in ("이번 주 게시", "중복 경고"):
+                app.sidebar.radio[0].set_value(menu).run()
+                self.assertFalse(app.exception)
+
     def test_owner_can_prepare_review_export_and_record_without_network(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"AFFILIATE_HUB_HOME": directory}):
             app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=20).run()
@@ -25,6 +49,7 @@ class AppTests(unittest.TestCase):
                 self.assertFalse(app.exception)
 
             self.assertFalse(app.exception)
+            app.sidebar.radio[0].set_value("상품 자료").run()
             field("text_input", "상품명").set_value("화면 테스트 수납함")
             field("text_input", "공식 상품 정보 / 근거 URL").set_value("https://example.com/test")
             field("text_area", "출처에서 확인한 사실").set_value("테스트 자료: 가로 20cm")

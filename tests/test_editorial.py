@@ -154,7 +154,7 @@ class EditorialTests(unittest.TestCase):
         self.addCleanup(connection.close)
         initialize(connection)
         initialize(connection)
-        self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
+        self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
         self.assertEqual(connection.execute("SELECT body FROM content_drafts WHERE id=1").fetchone()[0], "기존 본문")
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM exports").fetchone()[0], 1)
         self.assertEqual(connection.execute("SELECT COUNT(*) FROM job_runs").fetchone()[0], 1)
@@ -164,6 +164,8 @@ class EditorialTests(unittest.TestCase):
         self.assertEqual(len(backups), 1)
         with closing(sqlite3.connect(backups[0])) as backup:
             self.assertEqual(backup.execute("PRAGMA user_version").fetchone()[0], 1)
+        v3_backups = list(self.settings.database.parent.glob("pre-v3-*.sqlite3"))
+        self.assertEqual(len(v3_backups), 1)
 
 
 if __name__ == "__main__":

@@ -57,6 +57,7 @@ def run_scenario(home: Path) -> dict:
     with patch.dict(os.environ, {"AFFILIATE_HUB_HOME": str(home)}):
         hub = Hub(Settings(home))
         app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=20).run()
+        app.sidebar.radio[0].set_value("상품 자료").run()
 
         def field(group, label):
             return next(item for item in getattr(app, group) if item.label == label)

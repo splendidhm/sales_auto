@@ -1,15 +1,17 @@
 # AGENTS.md — Affiliate Automation Hub
 
-## Verified implementation snapshot (2026-10-08)
+## Verified implementation snapshot (2026-10-13)
 
-- Phase 1 and phase 2 implemented: offline CLI/mock collection, SQLite v2, local Streamlit product input, revision-specific review/approval, TXT export and manual Naver publication URL records.
+- Phase 1 through the template-first Naver pilot are implemented: offline CLI/mock collection, SQLite v3, blog/channel settings, a 4-week/12-post calendar, deterministic templates, duplicate warnings, local review/approval, publication packages and manual Naver URL records.
+- Blog workflow is `planned -> research -> draft -> reviewed -> approved -> packaged -> published`. Only approved/package-ready items appear in This Week. Product/link/body changes invalidate approval and return linked plans to draft.
+- Affiliate use is explicit per content plan. Informational plans omit an existing affiliate link and disclosure from export. Affiliate plans require channel status `shopping_connect_ready`, a confirmed Shopping Connect link, disclosure and review.
 - Product categories: living/storage and robot vacuums. Updates that omit category preserve the existing category. Invalid URL ports and malformed hosts return application validation errors.
-- Verification: 22 unittest tests passed; isolated robot-vacuum AppTest scenario passed 12 checks. Production DB hash unchanged during scenario. No actual Naver publication or paid API use.
+- Verification: 28 unittest tests passed, loopback Streamlit health returned HTTP 200, and the current isolated robot-vacuum scenario passed 12 checks without changing the production DB. No actual Naver publication or paid API use.
 - Core modules: db/migrations, editorial, publishing, service, runtime and cli in src/affiliate_hub. app.py is the local UI; scripts/test_robot_workflow.py reproduces the retained robot test.
 - Current source-of-truth handoff: HANDOFF.md. Skill/tool usage audit: SKILLS_USED.md. Reproduction instructions: README.md.
 - Repository requested by owner: https://github.com/splendidhm/sales_auto.git; branch main; initial delivery commit message: 쇼핑커넥트 블로그 자동화. This request explicitly authorizes committing/pushing this delivery; it is not blanket authorization for future pushes.
 - Never commit runtime databases, exports, logs, .venv, .env or secrets. Reproduce test artifacts from the scripts on a new checkout.
-- Next development milestone: grounded AI drafts and cost controls after provider/key/budget setup; no live affiliate APIs, AI generation, auto-posting, WordPress integration or recurring backups are currently implemented.
+- The production DB was backed up and migrated from v2 to v3. Blog settings and the 12 plans remain empty until the owner enters the real Naver blog URL. Next milestone is the first manually published pilot post, followed by grounded AI drafts and cost controls after provider/key/budget setup.
 
 ## 1. Mission and operating context
 Build a maintainable, Windows-first, Python-based affiliate content automation system. Prioritize Naver Shopping Connect, then add Coupang Partners. Start with a separate Naver Blog about living/storage products; add a separate WordPress site after validation. Require factual review and human approval before any eventual publication.
@@ -19,9 +21,9 @@ Build a maintainable, Windows-first, Python-based affiliate content automation s
 - Coupang Partners membership: **not yet registered**; no API credentials may be assumed.
 - Existing HPL website: local sibling `HPL_auto` is Next.js, with code-managed economic/data articles and no observed CMS publishing endpoint. Keep HPL separate; live deployment parity is unverified.
 - Target channels: Naver Blog first (manual posting), separate WordPress later. Instagram is outside initial scope.
-- Naver Blog / Shopping Connect are not yet prepared. No API keys. Review budget: 15–30 minutes daily; recurring cost cap KRW 50,000/month.
+- A dedicated Naver Blog has been created, but its real name/URL is not stored in the app yet. Brand Connect and Shopping Connect are not yet linked. No API keys. Review budget: 15–30 minutes daily; recurring cost cap KRW 50,000/month.
 - Windows Task Scheduler is the initial runtime; hosting/cloud may be added later.
-- Phase 2 local manual editorial UI and schema v2 now exist. Read HANDOFF.md for actual verification; do not infer live integrations from the architecture.
+- Local manual editorial UI and schema v3 now exist. Read HANDOFF.md for actual verification; do not infer live integrations from the architecture.
 
 ## 2. Non-negotiable engineering rules
 1. **Inspect first:** Check repository files, Git status, Python version, existing tests and configuration before editing. Preserve user work; do not overwrite working code without reason.
@@ -109,7 +111,7 @@ Minimum conceptual entities: `products`, `affiliate_links`, `content_drafts`, `p
 - **Phase 4:** Separate WordPress via official REST API and application credentials after a 4-week/12-post pilot, review within 30 minutes/day for the last 2 weeks, and total recurring cost within KRW 50,000/month. These are internal operating gates, not platform enrollment rules.
 - **Phase 5:** Coupang membership/API verification and adapter; attribution-aware performance reports, scheduler hardening, daily backups with 30-day retention and restore tests. No invented item-level attribution.
 - User authorized phase 2. Keep future live integrations, paid API calls and actual publication outside this implementation.
-- Schema v2 is additive: legacy content_drafts preserve v1 snapshots; editorial_state + draft_revisions are authoritative for real content. Never read legacy status/title as the current state of a real draft.
+- Schema v2/v3 migrations are additive: legacy content_drafts preserve v1 snapshots; editorial_state + draft_revisions are authoritative for real content, while blog_settings + content_plans hold channel operations. Never read legacy status/title as the current state of a real draft.
 - All UI writes use Hub.mutate and the same OS lock as CLI. Changing product facts/links or draft text invalidates approval. Review/approval/export must check the current revision and product version.
 - Streamlit must bind to loopback only. No public hosting or remote authentication has been implemented.
 

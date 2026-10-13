@@ -20,9 +20,13 @@ def connect(path: Path) -> sqlite3.Connection:
 
 def initialize(connection: sqlite3.Connection) -> None:
     version = connection.execute("PRAGMA user_version").fetchone()[0]
-    if version not in (0, 1, 2):
+    if version not in (0, 1, 2, 3):
         raise ValueError("Unsupported database schema")
+    if version == 3:
+        return
     if version == 2:
+        from affiliate_hub.migrations import migrate_v3
+        migrate_v3(connection)
         return
     connection.executescript("""
         CREATE TABLE IF NOT EXISTS products (
@@ -66,6 +70,8 @@ def initialize(connection: sqlite3.Connection) -> None:
     """)
     from affiliate_hub.migrations import migrate_v2
     migrate_v2(connection)
+    from affiliate_hub.migrations import migrate_v3
+    migrate_v3(connection)
 
 
 def upsert_products(connection: sqlite3.Connection, products: list[Product]) -> dict[str, int]:

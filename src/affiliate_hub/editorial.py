@@ -105,28 +105,50 @@ def save_product(connection: sqlite3.Connection, *, name: str, source_url: str,
         (product_id, version, facts.strip(), image_rights, image_notes.strip(), experience.strip(), link_id))
     connection.execute("""UPDATE editorial_state SET status='needs_recheck',approved_revision=NULL
         WHERE draft_id IN (SELECT id FROM content_drafts WHERE product_id=?)""", (product_id,))
+    connection.execute("""UPDATE content_plans SET stage='draft',updated_at=?
+        WHERE draft_id IN (SELECT id FROM content_drafts WHERE product_id=?)""", (now(), product_id))
     return {"product_id": product_id, "version": version}
 
 
 def get_draft(connection: sqlite3.Connection, draft_id: int) -> dict:
     row = connection.execute("""SELECT d.id,d.product_id,e.status,e.revision,e.approved_revision,
-        r.title,r.body,r.disclosure,r.product_version,r.source_snapshot
+        r.title,r.body,r.disclosure,r.product_version,r.source_snapshot,
+        c.id AS plan_id,c.scheduled_date,c.content_type,c.keyword,c.affiliate_enabled,c.tags,c.image_checklist
         FROM content_drafts d JOIN editorial_state e ON e.draft_id=d.id
-        JOIN draft_revisions r ON r.draft_id=d.id AND r.revision=e.revision WHERE d.id=?""", (draft_id,)).fetchone()
+        JOIN draft_revisions r ON r.draft_id=d.id AND r.revision=e.revision
+        LEFT JOIN content_plans c ON c.draft_id=d.id WHERE d.id=?""", (draft_id,)).fetchone()
     require(row is not None, "실제 상품 원고를 찾을 수 없습니다.")
     return dict(row)
 
 
-def start_draft(connection: sqlite3.Connection, product_id: int) -> dict:
+def start_draft(connection: sqlite3.Connection, product_id: int, plan_id: int | None = None) -> dict:
     product = get_product(connection, product_id)
     require(not product["is_mock"] and product["version"] is not None, "실제 등록 상품만 원고를 만들 수 있습니다.")
-    title = f"{product['name']} 선택 전 확인할 점"
-    body = f"확인한 상품 정보\n{product['facts']}\n\n[미확인] 공간·용도별 선택 기준과 주의사항을 작성하세요."
+    plan = None
+    if plan_id is not None:
+        from affiliate_hub.planning import get_plan
+        plan = get_plan(connection, plan_id)
+        require(plan["draft_id"] is None, "이 계획에는 이미 원고가 연결되어 있습니다.")
+        if plan["affiliate_enabled"]:
+            require(bool(product["affiliate_url"]) and product["provider"] == "shopping_connect",
+                    "제휴 계획에는 공식 쇼핑커넥트 링크가 등록된 상품이 필요합니다.")
+    title = plan["title_candidates"][0] if plan else f"{product['name']} 선택 전 확인할 점"
+    if plan:
+        sections = "\n\n".join(f"## {heading}\n[미확인] 출처를 확인해 작성하세요." for heading in plan["template_outline"])
+        body = (f"자료에서 확인한 상품\n- {product['name']}\n- {product['facts']}\n\n{sections}\n\n"
+                "직접 사용하지 않았다면 사용 후기처럼 표현하지 않습니다.")
+    else:
+        body = f"확인한 상품 정보\n{product['facts']}\n\n[미확인] 공간·용도별 선택 기준과 주의사항을 작성하세요."
     cursor = connection.execute("INSERT INTO content_drafts(product_id,title,body,template_version,created_at) VALUES(?,?,?,?,?)",
                                 (product_id, title, body, "manual-v2", now()))
     draft_id = cursor.lastrowid
     connection.execute("INSERT INTO editorial_state VALUES(?,0,'draft',NULL)", (draft_id,))
-    return save_draft(connection, draft_id, 0, title, body, "")
+    result = save_draft(connection, draft_id, 0, title, body, "")
+    if plan_id is not None:
+        from affiliate_hub.planning import link_plan_draft
+        link_plan_draft(connection, plan_id, draft_id)
+        result["plan_id"] = plan_id
+    return result
 
 
 def save_draft(connection: sqlite3.Connection, draft_id: int, expected_revision: int,
@@ -145,6 +167,8 @@ def save_draft(connection: sqlite3.Connection, draft_id: int, expected_revision:
                         product["version"], json.dumps(product, ensure_ascii=False), now()))
     connection.execute("UPDATE editorial_state SET revision=?,status=?,approved_revision=NULL WHERE draft_id=?",
                        (revision, "draft" if revision == 1 else "needs_recheck", draft_id))
+    from affiliate_hub.planning import sync_plan_stage
+    sync_plan_stage(connection, draft_id, "draft")
     return {"draft_id": draft_id, "revision": revision}
 
 
@@ -154,7 +178,10 @@ def ready(connection: sqlite3.Connection, draft: dict) -> dict:
     require(product["version"] == draft["product_version"], "상품 자료가 변경되었습니다. 원고를 확인하고 새 버전으로 저장하세요.")
     require(product["image_rights"] != "unknown", "이미지 사용 권한을 확인하거나 이미지 없음으로 변경하세요.")
     require("[미확인]" not in draft["title"] + draft["body"], "원고의 미확인 항목을 해결하세요.")
-    if product["affiliate_url"]:
+    affiliate_enabled = bool(draft.get("affiliate_enabled")) if draft.get("plan_id") else bool(product["affiliate_url"])
+    if affiliate_enabled:
+        require(bool(product["affiliate_url"]) and product["provider"] == "shopping_connect",
+                "제휴 원고에는 공식 쇼핑커넥트 링크가 필요합니다.")
         require(bool(draft["disclosure"].strip()), "제휴 원고에는 확인한 고지 문구를 입력하세요.")
     return product
 
@@ -170,6 +197,8 @@ def review(connection: sqlite3.Connection, draft_id: int, expected_revision: int
     connection.execute("INSERT INTO review_events(draft_id,revision,action,reviewer,checks,created_at) VALUES(?,?,'reviewed',?,?,?)",
                        (draft_id, expected_revision, reviewer.strip(), json.dumps(checks), now()))
     connection.execute("UPDATE editorial_state SET status='reviewed' WHERE draft_id=?", (draft_id,))
+    from affiliate_hub.planning import sync_plan_stage
+    sync_plan_stage(connection, draft_id, "reviewed")
     return {"status": "reviewed"}
 
 
@@ -181,6 +210,8 @@ def approve(connection: sqlite3.Connection, draft_id: int, expected_revision: in
     connection.execute("INSERT INTO review_events(draft_id,revision,action,reviewer,checks,created_at) VALUES(?,?,'approved',?,'{}',?)",
                        (draft_id, expected_revision, reviewer.strip(), now()))
     connection.execute("UPDATE editorial_state SET status='approved',approved_revision=revision WHERE draft_id=?", (draft_id,))
+    from affiliate_hub.planning import sync_plan_stage
+    sync_plan_stage(connection, draft_id, "approved")
     return {"status": "approved"}
 
 
@@ -189,10 +220,15 @@ def approved_text(connection: sqlite3.Connection, draft_id: int) -> tuple[dict, 
     product = ready(connection, draft)
     require(draft["status"] in ("approved", "published") and draft["approved_revision"] == draft["revision"],
             "현재 버전을 검토·승인한 뒤 게시 자료를 내보낼 수 있습니다.")
-    parts = [draft["disclosure"], draft["title"], draft["body"]]
-    if product["affiliate_url"]:
+    affiliate_enabled = bool(draft.get("affiliate_enabled")) if draft.get("plan_id") else bool(product["affiliate_url"])
+    parts = [draft["disclosure"] if affiliate_enabled else "", draft["title"], draft["body"]]
+    if affiliate_enabled:
         parts.append("상품 링크\n" + product["affiliate_url"])
     parts.append("자료 출처\n" + product["source_url"] + "\n확인 시각: " + product["observed_at"])
+    if draft.get("plan_id"):
+        tags = " ".join("#" + tag.lstrip("#") for tag in json.loads(draft["tags"]))
+        images = "\n".join("- [ ] " + item for item in json.loads(draft["image_checklist"]))
+        parts.extend(["태그 후보\n" + tags, "이미지 체크리스트\n" + images])
     return draft, "\n\n".join(part for part in parts if part) + "\n"
 
 
@@ -227,4 +263,6 @@ def record_publication(connection: sqlite3.Connection, draft_id: int, expected_r
     cursor = connection.execute("INSERT INTO publication_records(draft_id,revision,url,recorded_at) VALUES(?,?,?,?)",
                                 (draft_id, expected_revision, url, now()))
     connection.execute("UPDATE editorial_state SET status='published' WHERE draft_id=?", (draft_id,))
+    from affiliate_hub.planning import sync_plan_stage
+    sync_plan_stage(connection, draft_id, "published")
     return {"publication_id": cursor.lastrowid, "recorded": True, "verified_online": False}
