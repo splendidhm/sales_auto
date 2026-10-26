@@ -1,5 +1,21 @@
 # AGENTS.md — Affiliate Automation Hub
 
+## Current operating decision (2026-10-26; supersedes older roadmap)
+
+- Operate one Naver blog expanding HiddenPatternsLab Instagram content, with real estate and finance as its editorial center. Initial publication is at most one post per day (supersedes the former two-post limit). The owner manually requests, reviews and posts/schedules content.
+- docs/BLOG_EDITORIAL_GUIDE.md is the single editorial source of truth: 20 published posts per cycle, category targets 7/6/4/2/1, HPL source revalidation, topic scoring, six article types, flexible body-length defaults, verification reports and manual monthly metrics. Topic suggestions and checks are on-demand conversation work, not implemented automation. Keep the HPL website code separate; using owner-supplied Instagram content is allowed.
+- Work within the owner's Plus environment and its available limits. Do not promise unlimited generation, use a subscription as an API credential, or fall back to paid API calls. Provider/model selection and API budget are deferred.
+- Two workflows: topic → draft → user review → requested AI images; or user photos + topic + experience notes → draft with photo order/captions. Never invent experience or supplement user photos with generated images unless requested.
+- Follow docs/MANUAL_BLOG_WORKFLOW.md and its blank record templates. Keep actual posts/photos/history under ignored data/manual-blog/. Consult supplied recent records rather than assuming cross-conversation memory.
+- Vary introductions, structure, image placement and endings while retaining a consistent voice. This is editorial quality control, not a guarantee against account penalties.
+- Propose 10–20 directly relevant hashtags per post (default 15), prioritizing evidenced search interest and topical issues. Distinguish measured popularity from topic-based candidates; avoid unrelated trends, duplicate variants and invented policy announcements. This is an editorial target, not a claimed platform limit.
+- Thumbnail/visual design and image specifications await further instructions; body style, length and tags now follow the editorial guide. Internal record templates are not posting design templates. Image counts are per request.
+- This iteration changes documentation and prepares local records only. Existing product-required drafts, Mon/Wed/Fri calendar and one-slot-per-day app constraints remain. Do not fabricate products or schedules to fit free-topic posts into the old app.
+- First topic-based post and two built-in generated images are prepared under ignored data/manual-blog/posts/2026-10-26-seoul-600m/, including copy-ready HTML/TXT/ZIP. Actual Naver publication and copy/paste rendering are unverified. Read the latest HANDOFF.md summary before continuing. Next: confirm owner publication URL/copy experience, receive design guidance or another topic; the user-photo workflow remains untried.
+- Automation, API billing, photo-management UI, product-optional drafts, WordPress and Coupang remain future work. Two daily slots are no longer a current requirement. Reassess priorities from real operating records. Historical 12-post pilot and KRW 50,000 API/hosting assumptions are not current launch requirements.
+
+The implementation snapshot and roadmap below describe the previous system. When operating priorities conflict, this section is authoritative; technical safety rules still apply.
+
 ## Verified implementation snapshot (2026-10-13)
 
 - Phase 1 through the template-first Naver pilot are implemented: offline CLI/mock collection, SQLite v3, blog/channel settings, a 4-week/12-post calendar, deterministic templates, duplicate warnings, local review/approval, publication packages and manual Naver URL records.
